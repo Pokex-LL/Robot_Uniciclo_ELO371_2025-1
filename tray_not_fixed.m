@@ -41,21 +41,21 @@ end
 %% Trayectoria de referencia (círculo)
 dt = 0.01;
 
-% T  = 20;      
-% t  = 0:dt:T;
-% R  = 2;
-% w0 = 2*pi/T;
-% xc = 0; yc = 2;
-% x_d = xc + R*cos(w0*t);
-% y_d = yc + R*sin(w0*t);
+%T  = 20;      
+%t  = 0:dt:T;
+%R  = 2;
+%w0 = 2*pi/T;
+%xc = 0; yc = 2;
+%x_d = xc + R*cos(w0*t);
+%y_d = yc + R*sin(w0*t);
 
 % Trayectoria parametrizada: SINUSOIDE
-% T  = 15;              
-% t  = 0:dt:T;
-% A  = 1;                       
-% w_traj  = 2*pi/(T/1.5);           
-% y_d = A*sin(w_traj * t);
-% x_d = t;
+%T  = 15;              
+%t  = 0:dt:T;
+%A  = 1;                       
+%w_traj  = 2*pi/(T/1.5);           
+%y_d = A*sin(w_traj * t);
+%x_d = t;
 
 % Lemniscata basada en sin(t) y sin(t)*cos(t)
 T  = 10;
@@ -65,11 +65,11 @@ x_d = a * sin(t);
 y_d = a * sin(t) .* cos(t);
 
 %recta
-% T  = 20;
-% t  = 0:dt:T;
-% V  = 0.5;           
-% x_d = V * t;         
-% y_d = V * t;     
+%T  = 20;
+%t  = 0:dt:T;
+%V  = 0.5;           
+%x_d = V * t;         
+%y_d = V * t;     
 
 
 %% Animación
@@ -109,7 +109,7 @@ R_pos = [0;  wheel_offset];  % derecha
 % --- inicializar figura ---
 figure; axis equal; grid on; hold on;
 xlabel('x [m]'); ylabel('y [m]');
-title('Robot uniciclo – Trayectoria Recta');
+title('Robot uniciclo – Trayectoria');
 h2 = plot(x_d, y_d, 'b--', 'LineWidth', 2);  % referencia (azul punteado)
 traj_plot = plot(x(1), y(1), 'Color', [1 0.5 0], 'LineWidth', 1.2);  % naranja
 h_body   = patch(NaN, NaN, 'w', 'EdgeColor', 'r', 'FaceAlpha', 0, 'LineWidth', 2);  % borde rojo
@@ -142,77 +142,3 @@ for k = 1:20:N
     drawnow;
     pause(dt);
 end
-
-%% Calcular RMSE
-
-% Tiempos reales desde el CSV
-t_real = datos{:,1};
-
-% Rango válido (evita extrapolación fuera de la referencia)
-valid_idx = t_real >= t(1) & t_real <= t(end);
-t_real_valid = t_real(valid_idx);
-
-% Interpolar trayectoria de referencia en esos tiempos válidos
-x_d_interp = interp1(t, x_d, t_real_valid, 'linear');
-y_d_interp = interp1(t, y_d, t_real_valid, 'linear');
-
-% Extraer trayectoria real en los mismos puntos
-x_real = x(valid_idx);
-y_real = y(valid_idx);
-
-% Asegurarse de que todos los vectores son columna
-x_real     = x_real(:);
-y_real     = y_real(:);
-x_d_interp = x_d_interp(:);
-y_d_interp = y_d_interp(:);
-
-% Calcular error punto a punto
-e = sqrt((x_real - x_d_interp).^2 + (y_real - y_d_interp).^2);
-
-% Calcular RMSE (valor único)
-rmse = sqrt(mean(e.^2));
-
-% Mostrar en consola
-fprintf('RMSE de la trayectoria: %.4f metros\n', rmse);
-
-% Añadir como texto en el gráfico (opción más segura que annotation)
-text(min(x), min(y) - 0.1, sprintf('RMSE = %.4f m', rmse), ...
-     'FontSize', 11, 'BackgroundColor', 'w');
-%% RMSE de forma 
-
-N_uniform = 1000;
-
-% --- Real: [x, y] ---
-xy_real = [x(:), y(:)];
-d_real = [0; cumsum(sqrt(sum(diff(xy_real).^2, 2)))];
-d_real = d_real / d_real(end);  % normalizar a [0,1]
-[~, idx_unique_real] = unique(d_real);
-d_real = d_real(idx_unique_real);
-xy_real = xy_real(idx_unique_real, :);
-xy_real_uniform = interp1(d_real, xy_real, linspace(0,1,N_uniform), 'linear');
-
-% --- Referencia: [x_d, y_d] ---
-xy_ref = [x_d(:), y_d(:)];
-d_ref = [0; cumsum(sqrt(sum(diff(xy_ref).^2, 2)))];
-d_ref = d_ref / d_ref(end);
-[~, idx_unique_ref] = unique(d_ref);
-d_ref = d_ref(idx_unique_ref);
-xy_ref = xy_ref(idx_unique_ref, :);
-xy_ref_uniform = interp1(d_ref, xy_ref, linspace(0,1,N_uniform), 'linear');
-
-% --- Centrar ambas trayectorias (quitar desplazamiento)
-xy_real_centered = xy_real_uniform - mean(xy_real_uniform);
-xy_ref_centered  = xy_ref_uniform  - mean(xy_ref_uniform);
-
-% --- Alinear por rotación (mínimo error cuadrático, sin escala)
-H = xy_real_centered' * xy_ref_centered;
-[U, ~, V] = svd(H);
-R = V * U';
-xy_real_aligned = (R * xy_real_centered')';
-
-% --- Calcular error de forma
-e_forma = sqrt(sum((xy_real_aligned - xy_ref_centered).^2, 2));
-rmse_forma = sqrt(mean(e_forma.^2));
-
-% Mostrar
-fprintf('RMSE de forma (sin tiempo, offset ni rotación): %.4f metros\n', rmse_forma);
