@@ -3,21 +3,15 @@ clear; clc;
 % Parámetros físicos
 r = 0.05;     % radio rueda [m]
 L = 0.30;     % separación entre ruedas [m]
-%dt = 0.01;    % paso [s]
-%dt = 0.003699;
-T  = 15;      % tiempo total [s]
-%t  = 0:dt:T;
+dt = 0.01;    % paso [s]
+T  = 10;      % tiempo total [s]
+t  = 0:dt:T;
 N  = length(t); 
 
 %% Velocidades de las ruedas
-% wL = 27.28 * ones(1, N);
-% wR = 23.28 * ones(1, N);   % derecha más rápida → curva
-tiempo = readtable('der_izq.csv');
-t = table2array(tiempo(:, 1);
-Izq = readtable('der_izq.csv');
-wL = table2array(Izq(:, 3));
-Der = readtable('der_izq.csv');
-wR = table2array(Der(:, 2));
+wL = 27.28 * ones(1, N);
+wR = 23.28 * ones(1, N);   % derecha más rápida → curva
+
 %% Cinemática del cuerpo
 v     = r/2 * (wR + wL);        % velocidad lineal
 omega = r/L * (wR - wL);        % velocidad angular
@@ -87,3 +81,76 @@ for k = 1:20:N
     drawnow;
     pause(dt * 1);
 end
+%% Calcular RMSE
+
+% Tiempos reales desde el CSV
+t_real = datos{:,1};
+
+% Rango válido (evita extrapolación fuera de la referencia)
+valid_idx = t_real >= t(1) & t_real <= t(end);
+t_real_valid = t_real(valid_idx);
+
+% Interpolar trayectoria de referencia en esos tiempos válidos
+x_d_interp = interp1(t, x_d, t_real_valid, 'linear');
+y_d_interp = interp1(t, y_d, t_real_valid, 'linear');
+
+% Extraer trayectoria real en los mismos puntos
+x_real = x(valid_idx);
+y_real = y(valid_idx);
+
+% Asegurarse de que todos los vectores son columna
+x_real     = x_real(:);
+y_real     = y_real(:);
+x_d_interp = x_d_interp(:);
+y_d_interp = y_d_interp(:);
+
+% Calcular error punto a punto
+e = sqrt((x_real - x_d_interp).^2 + (y_real - y_d_interp).^2);
+
+% Calcular RMSE (valor único)
+rmse = sqrt(mean(e.^2));
+
+% Mostrar en consola
+fprintf('RMSE de la trayectoria: %.4f metros\n', rmse);
+
+% Añadir como texto en el gráfico (opción más segura que annotation)
+text(min(x), min(y) - 0.1, sprintf('RMSE = %.4f m', rmse), ...
+     'FontSize', 11, 'BackgroundColor', 'w');
+%% RMSE de forma 
+
+N_uniform = 1000;
+
+% --- Real: [x, y] ---
+xy_real = [x(:), y(:)];
+d_real = [0; cumsum(sqrt(sum(diff(xy_real).^2, 2)))];
+d_real = d_real / d_real(end);  % normalizar a [0,1]
+[~, idx_unique_real] = unique(d_real);
+d_real = d_real(idx_unique_real);
+xy_real = xy_real(idx_unique_real, :);
+xy_real_uniform = interp1(d_real, xy_real, linspace(0,1,N_uniform), 'linear');
+
+% --- Referencia: [x_d, y_d] ---
+xy_ref = [x_d(:), y_d(:)];
+d_ref = [0; cumsum(sqrt(sum(diff(xy_ref).^2, 2)))];
+d_ref = d_ref / d_ref(end);
+[~, idx_unique_ref] = unique(d_ref);
+d_ref = d_ref(idx_unique_ref);
+xy_ref = xy_ref(idx_unique_ref, :);
+xy_ref_uniform = interp1(d_ref, xy_ref, linspace(0,1,N_uniform), 'linear');
+
+% --- Centrar ambas trayectorias (quitar desplazamiento)
+xy_real_centered = xy_real_uniform - mean(xy_real_uniform);
+xy_ref_centered  = xy_ref_uniform  - mean(xy_ref_uniform);
+
+% --- Alinear por rotación (mínimo error cuadrático, sin escala)
+H = xy_real_centered' * xy_ref_centered;
+[U, ~, V] = svd(H);
+R = V * U';
+xy_real_aligned = (R * xy_real_centered')';
+
+% --- Calcular error de forma
+e_forma = sqrt(sum((xy_real_aligned - xy_ref_centered).^2, 2));
+rmse_forma = sqrt(mean(e_forma.^2));
+
+% Mostrar
+fprintf('RMSE de forma (sin tiempo, offset ni rotación): %.4f metros\n', rmse_forma);
